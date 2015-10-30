@@ -33,7 +33,7 @@ Quick start
 Gotchas
 *******
 
-The ``validate`` function downloads the signing certificate on every call. For performance reasons, it's worth caching certificates - you can do this by passing in a ``get_certificate_str`` function.
+The ``validate`` function downloads the signing certificate on every call. For performance reasons, it's worth caching certificates - you can do this by passing in a ``get_certificate`` function.
 
 This takes a ``url``, and returns the certificate content. Your function could cache to the filesystem, a database, or wherever makes sense.
 

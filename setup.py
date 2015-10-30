@@ -7,7 +7,7 @@ from setuptools import setup
 ROOT = os.path.dirname(__file__)
 
 setup(
-    version="0.1",
+    version="0.1.1",
     url="https://github.com/nathforge/validatesns",
     name="validatesns",
     description="Validate integrity of Amazon SNS messages",

@@ -27,7 +27,7 @@ class ValidationError(Exception):
 
 def validate(
     message,
-    get_certificate_str=lambda url: urlopen(url).read(),
+    get_certificate=lambda url: urlopen(url).read(),
     certificate_url_regex=DEFAULT_CERTIFICATE_URL_REGEX,
     max_age=DEFAULT_MAX_AGE
 ):
@@ -38,7 +38,7 @@ def validate(
         message:
             Decoded SNS message.
 
-        get_certificate_str:
+        get_certificate:
             Function that receives a URL, and returns the certificate from that
             URL as a string. The default doesn't implement caching.
 
@@ -63,10 +63,10 @@ def validate(
 
     # Passed the basic checks, let's download the cert.
     # We've validated the URL, so aren't worried about a malicious server.
-    certificate_str = get_certificate_str(message["SigningCertURL"])
+    certificate = get_certificate(message["SigningCertURL"])
 
     # Check the cryptographic signature.
-    SignatureValidator(certificate_str).validate(message)
+    SignatureValidator(certificate).validate(message)
 
 class SigningCertURLValidator(object):
     """
@@ -128,8 +128,8 @@ class SignatureValidator(object):
     AWS docs: http://docs.aws.amazon.com/sns/latest/dg/SendMessageToHttp.verify.signature.html
     """
 
-    def __init__(self, certificate_str):
-        self.certificate_str = certificate_str
+    def __init__(self, certificate):
+        self.certificate = certificate
 
     def validate(self, message):
         if not isinstance(message, dict):
@@ -146,9 +146,20 @@ class SignatureValidator(object):
         self._validate_signature(signature, signing_content)
 
     def _validate_signature(self, signature, content):
-        cert = oscrypto.asymmetric.load_certificate(self.certificate_str)
+        certificate = self.certificate
+        if isinstance(certificate, six.text_type):
+            certificate = certificate.encode()
+
+        if isinstance(content, six.text_type):
+            content = content.encode()
+
         try:
-            oscrypto.asymmetric.rsa_pkcs1v15_verify(cert, signature, content.encode("utf8"), "sha1")
+            oscrypto.asymmetric.rsa_pkcs1v15_verify(
+                oscrypto.asymmetric.load_certificate(certificate),
+                signature,
+                content,
+                "sha1"
+            )
         except oscrypto.errors.SignatureError:
             raise ValidationError("Invalid signature")
 

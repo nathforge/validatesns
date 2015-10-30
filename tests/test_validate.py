@@ -8,7 +8,7 @@ import six
 
 from validatesns import MessageAgeValidator, SignatureValidator, ValidationError, validate as _validate_fn
 
-PRIVATE_KEY_STR = six.b("""
+PRIVATE_KEY = six.b("""
 -----BEGIN PRIVATE KEY-----
 MIICeAIBADANBgkqhkiG9w0BAQEFAASCAmIwggJeAgEAAoGBAK+LkCvEsnMUws8s
 G5iQ8eDwCCtYBRaED8DmCOrZASJhUcijlZl2vFwx1Vo551ZJVw06zHjy04psRQ1r
@@ -27,7 +27,7 @@ WxsygMAWNvSfb6/R
 -----END PRIVATE KEY-----
 """.strip())
 
-CERT_STR = six.b("""
+CERT = six.b("""
 -----BEGIN CERTIFICATE-----
 MIIB6DCCAVGgAwIBAgIJAJvkgfs3SdauMA0GCSqGSIb3DQEBCwUAMA0xCzAJBgNV
 BAYTAlVLMB4XDTE1MTAzMDA5NDYzNloXDTM1MTIzMTA5NDYzNlowDTELMAkGA1UE
@@ -60,20 +60,22 @@ class TestMixin(object):
             "TopicArn": "arn:aws:sn:us-east-1:345:MyTopic",
         }
 
-        self.signing_cert_strs = {
-            "https://sns.us-east-1.amazonaws.com/cert.pem": CERT_STR,
-            "https://sns.us-east-1.amazonaws.com.cn/cert.pem": CERT_STR
+        self.signing_certs = {
+            "https://sns.us-east-1.amazonaws.com/cert.pem": CERT,
+            "https://sns.us-east-1.amazonaws.com.cn/cert.pem": CERT
         }
 
     def validate(self):
         if isinstance(self.message, dict):
-            certificate_str = self.signing_cert_strs.get(self.message.get("SigningCertURL"))
+            certificate = self.signing_certs.get(self.message.get("SigningCertURL"))
         else:
-            certificate_str = None
+            certificate = None
 
         with mock.patch("validatesns.urlopen") as mock_urlopen:
-            if certificate_str:
-                mock_urlopen.return_value = six.BytesIO(certificate_str)
+            if certificate:
+                if isinstance(certificate, six.text_type):
+                    certificate = certificate.encode()
+                mock_urlopen.return_value = six.BytesIO(certificate)
             else:
                 mock_urlopen.side_effect = NotImplementedError("Shouldn't happen")
 
@@ -91,9 +93,9 @@ class TestMixin(object):
         if not isinstance(self.message, dict):
             raise ValueError("Can't sign non-dict messages")
 
-        private_key = oscrypto.asymmetric.load_private_key(PRIVATE_KEY_STR)
+        private_key = oscrypto.asymmetric.load_private_key(PRIVATE_KEY)
         signing_content = SignatureValidator("")._get_signing_content(self.message)
-        signature = oscrypto.asymmetric.rsa_pkcs1v15_sign(private_key, signing_content.encode("utf8"), "sha1")
+        signature = oscrypto.asymmetric.rsa_pkcs1v15_sign(private_key, signing_content.encode(), "sha1")
 
         return base64.b64encode(signature)
 
@@ -188,7 +190,7 @@ class SignatureValidatorTestCase(TestMixin, unittest.TestCase):
         self.sign_message()
         self.validate()
 
-    def test_usigned_message(self):
+    def test_unsigned_message(self):
         with self.assertRaisesRegexp(ValidationError, r"^Invalid signature$"):
             self.validate()
 
@@ -197,3 +199,12 @@ class SignatureValidatorTestCase(TestMixin, unittest.TestCase):
         self.message["Signature"] = self.message["Signature"].swapcase()
         with self.assertRaisesRegexp(ValidationError, r"^Invalid signature$"):
             self.validate()
+
+    def test_valid_signature_with_unicode_certificate(self):
+        self.signing_certs = {
+            "https://sns.us-east-1.amazonaws.com/cert.pem": CERT.decode(),
+            "https://sns.us-east-1.amazonaws.com.cn/cert.pem": CERT.decode()
+        }
+
+        self.sign_message()
+        self.validate()
