@@ -139,7 +139,11 @@ class SignatureValidator(object):
         if signature_version != "1":
             raise ValidationError("Unexpected SignatureVersion {!r}".format(signature_version))
 
-        signature = base64.b64decode(message["Signature"])
+        base64_signature = message.get("Signature")
+        if not isinstance(base64_signature, six.string_types):
+            raise ValidationError("Expected Signature to be a string, but received {!r}".format(base64_signature))
+
+        signature = base64.b64decode(base64_signature)
 
         signing_content = self._get_signing_content(message)
 

@@ -190,6 +190,21 @@ class SignatureValidatorTestCase(TestMixin, unittest.TestCase):
         self.sign_message()
         self.validate()
 
+    def test_missing_signature(self):
+        del self.message["Signature"]
+        with self.assertRaisesRegexp(ValidationError, r"^Expected Signature to be a string, but received .*$"):
+            self.validate()
+
+    def test_non_string_signature(self):
+        self.message["Signature"] = 99
+        with self.assertRaisesRegexp(ValidationError, r"^Expected Signature to be a string, but received .*$"):
+            self.validate()
+
+    def test_non_base64_signature(self):
+        self.message["Signature"] = "!!!???"
+        with self.assertRaisesRegexp(ValidationError, r"^Invalid signature$"):
+            self.validate()
+
     def test_unsigned_message(self):
         with self.assertRaisesRegexp(ValidationError, r"^Invalid signature$"):
             self.validate()
